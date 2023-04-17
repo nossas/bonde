@@ -8,24 +8,12 @@ from django.db import models
 from django.utils.timezone import now
 
 # from django.contrib.postgres.fields import ArrayField
-
+from .conf import settings
 from .exceptions import (
     InvalidRequestAPIException,
     FieldException,
     InvalidInstanceModelException,
 )
-
-
-# Create your models here.
-class ActionGroup(models.Model):
-    name = models.CharField(verbose_name="Name", max_length=150)
-
-    api_secret_key = models.CharField(verbose_name="API Secret key", max_length=200)
-
-    is_valid = models.BooleanField(verbose_name="Is a valid group?", default=False)
-
-    def __str__(self):
-        return self.name
 
 
 class CampaignManager(models.Manager):
@@ -68,7 +56,7 @@ class Campaign(models.Model):
 
     api_response_json = models.JSONField(verbose_name="API Response JSON", blank=True)
 
-    action_group = models.ForeignKey(ActionGroup, on_delete=models.CASCADE)
+    action_group = models.ForeignKey(settings.ACTIONNETWORK_GROUPMODEL, on_delete=models.CASCADE)
 
     objects = CampaignManager()
 
@@ -154,11 +142,7 @@ class CustomField(models.Model):
 
 
 class ActionRecordManager(models.Manager):
-    def create(self, add_tags=[], remove_tags=[], **kwargs):
-        campaign = kwargs.get("campaign")
-        if not campaign:
-            raise FieldException("campaign is required")
-
+    def create(self, campaign, add_tags=[], remove_tags=[], **kwargs):
         # Raise Incorrect Action Model
         if (
             self.model.__name__ == "Donation"
@@ -180,11 +164,21 @@ class ActionRecordManager(models.Manager):
 
         # Instance of person
         person = kwargs.get("person")
+        if person:
+            del kwargs["person"]
 
         # Fields to create or get person instance
         given_name = kwargs.get("given_name")
+        if given_name:
+            del kwargs["given_name"]
+
         family_name = kwargs.get("family_name")
+        if family_name:
+            del kwargs["family_name"]
+
         email_address = kwargs.get("email_address")
+        if email_address:
+            del kwargs["email_address"]
 
         if not person and not email_address:
             raise FieldException("person or email_address is required")
@@ -208,7 +202,8 @@ class ActionRecordManager(models.Manager):
             if postal_address:
                 PostalAddress.objects.create(**postal_address, person=person)
 
-        if self.model.__name__ == "Donation":
+        # TODO: Mudar forma alterar implementação a partir dos tipos de ação
+        if self.__get_resource_name() == 'donations':
             amount = kwargs.get("amount")
             created_date = kwargs.get("created_date")
 
@@ -224,16 +219,8 @@ class ActionRecordManager(models.Manager):
                 add_tags=add_tags,
                 remove_tags=remove_tags,
                 # Params only used to donations
-                recipients=[dict(display_name=campaign.title, amount=amount)],
+                recipients=[dict(display_name=campaign.title, amount=float(amount))],
                 created_date=created_date.strftime("%Y-%m-%dT%H:%M:%SZ"),
-            )
-
-            action = super(ActionRecordManager, self).create(
-                person=person,
-                campaign=campaign,
-                api_response_json=response.json(),
-                amount=amount,
-                created_date=created_date,
             )
         else:
             response = self.__request_action_network_api(
@@ -243,9 +230,13 @@ class ActionRecordManager(models.Manager):
                 remove_tags=remove_tags,
             )
 
-            action = super(ActionRecordManager, self).create(
-                person=person, campaign=campaign, api_response_json=response.json()
-            )
+        # Call super create method for instance
+        action = super(ActionRecordManager, self).create(
+            person=person,
+            campaign=campaign,
+            api_response_json=response.json(),
+            **kwargs,
+        )
 
         self.__log_history(action)
 
@@ -263,10 +254,22 @@ class ActionRecordManager(models.Manager):
             change_message=f"ADD {instance.campaign.resource_name} TO {instance.campaign.title} // {instance.uuid()}",
         )
 
+    def __get_resource_name(self):
+        if issubclass(self.model, SubmissionInterface):
+            return "submissions"
+        elif issubclass(self.model, SignatureInterface):
+            return "signatures"
+        elif issubclass(self.model, DonationInterface):
+            return "donations"
+        else:
+            raise InvalidInstanceModelException(
+                f"{self.model.__name__} should be implement an interface"
+            )
+
     def __request_action_network_api(
         self, person, campaign, add_tags=[], remove_tags=[], **kwargs
     ):
-        resource_name = f"{self.model.__name__.lower()}s"
+        resource_name = self.__get_resource_name()
         endpoint = f"{campaign.get_endpoint()}/{resource_name}"
 
         payload = {
@@ -307,11 +310,17 @@ class ActionRecordManager(models.Manager):
         if response.status_code == 200:
             return response
 
+        import ipdb
+
+        ipdb.set_trace()
+
         raise InvalidRequestAPIException(response.text)
 
 
 class ActionRecordModel(models.Model):
     person = models.ForeignKey(Person, on_delete=models.CASCADE)
+
+    created_date = models.DateTimeField(verbose_name="Created date")
 
     # add_tags = ArrayField(models.CharField(verbose_name="Add tags", max_length=30))
 
@@ -331,14 +340,32 @@ class ActionRecordModel(models.Model):
         return uuid_text.replace("action_network:", "")
 
 
-class Submission(ActionRecordModel):
-    pass
+class ActionGroupInterface(models.Model):
+    name = models.CharField(verbose_name="Name", max_length=150)
+
+    api_secret_key = models.CharField(verbose_name="API Secret key", max_length=200)
+
+    is_valid = models.BooleanField(verbose_name="Is a valid group?", default=False)
+
+    class Meta:
+        abstract = True
+
+    def __str__(self):
+        return self.name
 
 
-class Signature(ActionRecordModel):
-    pass
+class SubmissionInterface(ActionRecordModel):
+    class Meta:
+        abstract = True
 
 
-class Donation(ActionRecordModel):
+class SignatureInterface(ActionRecordModel):
+    class Meta:
+        abstract = True
+
+
+class DonationInterface(ActionRecordModel):
     amount = models.DecimalField(verbose_name="Amount", decimal_places=2, max_digits=10)
-    created_date = models.DateTimeField(verbose_name="Created date")
+
+    class Meta:
+        abstract = True

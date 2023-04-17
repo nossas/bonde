@@ -1,5 +1,10 @@
 include LICENSE
 include README.md
+
 recursive-include actionnetwork/static *
 recursive-include actionnetwork/templates *
+
+recursive-include openapi/static *
+recursive-include openapi/templates *
+
 recursive-include docs *

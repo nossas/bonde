@@ -1,22 +1,19 @@
 from django.contrib import admin
 
 from .models import (
-    ActionGroup,
+    # ActionGroup,
     Campaign,
     Person,
     EmailAddress,
     PhoneNumber,
     PostalAddress,
-    CustomField,
-    Signature,
-    Submission,
-    Donation
+    CustomField
 )
 
 
 class ReadOnlyMixin(object):
 
-    def has_add_permission(self, request, obj=None):
+    def has_change_permission(self, request, obj=None):
         return False
 
     def has_delete_permission(self, request, obj=None):
@@ -24,9 +21,9 @@ class ReadOnlyMixin(object):
 
 
 
-class EmailAddressInline(ReadOnlyMixin, admin.TabularInline):
+class EmailAddressInline(admin.TabularInline):
     model = EmailAddress
-    readonly_fields = ('address', )
+    # readonly_fields = ('address', )
 
 
 class PhoneNumberInline(ReadOnlyMixin, admin.TabularInline):
@@ -60,9 +57,6 @@ class PersonAdmin(admin.ModelAdmin):
     def email_address(self, obj):
         return obj.email_addresses.first()
 
-    def has_add_permission(self, request, obj=None):
-        return False
-
 
 class CampaignAdmin(admin.ModelAdmin):
     list_display = ('title', 'resource_name')
@@ -95,24 +89,30 @@ class ActionAdmin(admin.ModelAdmin):
     def action__uuid(self, obj):
         return obj.uuid()
 
-    def has_add_permission(self, request, obj=None):
-        return False
+    # def has_add_permission(self, request, obj=None):
+    #     return False
     
     def has_change_permission(self, request, obj=None):
         return False
 
     def has_delete_permission(self, request, obj=None):
         return False
+    
+    def save_model(self, request, obj, form, change):
+        if not change:
+            return self.model.objects.create(**form.cleaned_data)
+        
+        return super().save_model(request, obj, form, change)
 
 
 class DonationActionAdmin(ActionAdmin):
     list_display = ActionAdmin.list_display + ('amount', 'created_date', )
 
 # Register your models here.
-admin.site.register(ActionGroup)
+# admin.site.register(ActionGroup)
 admin.site.register(Campaign, CampaignAdmin)
 admin.site.register(Person, PersonAdmin)
 
-admin.site.register(Donation, DonationActionAdmin)
-admin.site.register(Submission, ActionAdmin)
-admin.site.register(Signature, ActionAdmin)
+# admin.site.register(Donation, DonationActionAdmin)
+# admin.site.register(Submission, ActionAdmin)
+# admin.site.register(Signature, ActionAdmin)

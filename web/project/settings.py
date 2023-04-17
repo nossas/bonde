@@ -48,7 +48,14 @@ INSTALLED_APPS = [
 
     # apps in development
     'mapa.zendesk',
+
+    'rest_framework',
+    'rest_framework.authtoken',
     'bonde.actionnetwork',
+    
+    'bonde.openapi',
+    'bonde.openapi.actions',
+    'bonde.openapi.auth',
 ]
 
 MIDDLEWARE = [
@@ -97,6 +104,24 @@ DATABASES = {
 
 DATABASE_ROUTERS = ['mapa.zendesk.routers.ZendeskRouter']
 
+
+# Customize Action Network Group
+ACTIONNETWORK_GROUPMODEL = 'openapi_auth.UsersGroup'
+
+AUTH_USER_MODEL = 'openapi_auth.User'
+
+REST_FRAMEWORK = {
+    # Use Django's standard `django.contrib.auth` permissions,
+    # or allow read-only access for unauthenticated users.
+    # 'DEFAULT_PERMISSION_CLASSES': [
+    #     'rest_framework.permissions.DjangoModelPermissionsOrAnonReadOnly'
+    # ]
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.BasicAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
+        'rest_framework.authentication.TokenAuthentication'
+    ]
+}
 
 # Password validation
 # https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators
