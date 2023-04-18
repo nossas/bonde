@@ -1,10 +1,17 @@
 # https://simpleisbetterthancomplex.com/tutorial/2016/07/22/how-to-extend-django-user-model.html
+import uuid
+
 from django.db import models
-from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
+from django.contrib.auth.models import (
+    AbstractBaseUser,
+    BaseUserManager,
+    PermissionsMixin,
+)
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from bonde.actionnetwork.models import ActionGroupInterface
+
 
 class UserManager(BaseUserManager):
     def create_user(self, email, password=None, **extra_fields):
@@ -14,10 +21,7 @@ class UserManager(BaseUserManager):
         if not email:
             raise ValueError("Users must have an email address")
 
-        user = self.model(
-            email=self.normalize_email(email),
-            **extra_fields
-        )
+        user = self.model(email=self.normalize_email(email), **extra_fields)
 
         user.set_password(password)
         user.save(using=self._db)
@@ -31,21 +35,15 @@ class UserManager(BaseUserManager):
             raise ValueError("Superuser must have is_staff=True.")
         if extra_fields.get("is_superuser") is not True:
             raise ValueError("Superuser must have is_superuser=True.")
-    
-        user = self.create_user(
-            email,
-            password=password,
-            **extra_fields
-        )
+
+        user = self.create_user(email, password=password, **extra_fields)
         user.save(using=self._db)
         return user
 
 
 class User(AbstractBaseUser, PermissionsMixin):
     email = models.EmailField(
-        verbose_name=_("email address"),
-        max_length=255,
-        unique=True
+        verbose_name=_("email address"), max_length=255, unique=True
     )
     first_name = models.CharField(_("first name"), max_length=150, blank=True)
     last_name = models.CharField(_("last name"), max_length=150, blank=True)
@@ -74,3 +72,10 @@ class User(AbstractBaseUser, PermissionsMixin):
 
 class UsersGroup(ActionGroupInterface):
     users = models.ManyToManyField(User)
+    token = models.CharField(
+        verbose_name=_("external token"),
+        max_length=85,
+        default=uuid.uuid4(),
+        editable=False,
+        unique=True,
+    )

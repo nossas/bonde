@@ -1,4 +1,5 @@
-# Bonde APPS
+Bonde APPS
+---------------
 
 Espaço para experimentar aplicativos Python e Django isoladamente, considerando as necessidades e demandas da organização NOSSAS que contribui com a construção e discussão de tecnologias para o setor de ativismo civico.
 
@@ -52,3 +53,12 @@ O django possui uma ORM que facilita a modelagem e o gerenciamento do banco de d
 Execute o comando `python manage.py migrate` para executar migrações pendentes em sua base de dados.
 
 O comando `python manage.py makemigrations` verifica mudanças nos seus modelos de dados e cria novas migrações no caso de mudanças.
+
+
+# TODO
+
+1. Mobilizador autentica no APP (Token de usuário)
+2. Mobilizador lista grupos (Token de usuário)
+3. Mobilizador lista campanhas (Token de usuário)
+
+4. Ativista submete ação (Token do grupo)

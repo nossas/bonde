@@ -1,10 +1,11 @@
 import requests
 import json
 
-from django.contrib.contenttypes.models import ContentType
-from django.contrib.admin.models import LogEntry, ADDITION
-from django.contrib.auth.models import User
+# from django.contrib.contenttypes.models import ContentType
+# from django.contrib.admin.models import LogEntry, ADDITION
+# from django.contrib.auth.models import User
 from django.db import models
+from django.urls import reverse
 from django.utils.timezone import now
 
 # from django.contrib.postgres.fields import ArrayField
@@ -56,7 +57,9 @@ class Campaign(models.Model):
 
     api_response_json = models.JSONField(verbose_name="API Response JSON", blank=True)
 
-    action_group = models.ForeignKey(settings.ACTIONNETWORK_GROUPMODEL, on_delete=models.CASCADE)
+    action_group = models.ForeignKey(
+        settings.ACTIONNETWORK_GROUPMODEL, on_delete=models.CASCADE
+    )
 
     objects = CampaignManager()
 
@@ -66,21 +69,18 @@ class Campaign(models.Model):
     def get_endpoint(self):
         return self.api_response_json["_links"]["self"]["href"]
 
-    # def an_request(self):
-    #     response = requests.get(
-    #         self.get_endpoint(),
-    #         headers={"OSDI-API-Token": self.action_group.api_secret_key},
-    #     )
-
-    #     import ipdb
-
-    #     ipdb.set_trace()
+    def get_url_type(self):
+        return self.resource_name.replace("fundraising_pages", "donations").replace(
+            "petitions", "email_pressures"
+        )
 
 
 class Person(models.Model):
     given_name = models.CharField(verbose_name="Given name", max_length=80)
 
-    family_name = models.CharField(verbose_name="Family name", max_length=120)
+    family_name = models.CharField(
+        verbose_name="Family name", max_length=120, null=True, blank=True
+    )
 
     def __str__(self):
         return self.full_name()
@@ -203,7 +203,7 @@ class ActionRecordManager(models.Manager):
                 PostalAddress.objects.create(**postal_address, person=person)
 
         # TODO: Mudar forma alterar implementação a partir dos tipos de ação
-        if self.__get_resource_name() == 'donations':
+        if self.__get_resource_name() == "donations":
             amount = kwargs.get("amount")
             created_date = kwargs.get("created_date")
 
@@ -238,21 +238,21 @@ class ActionRecordManager(models.Manager):
             **kwargs,
         )
 
-        self.__log_history(action)
+        # self.__log_history(action)
 
         return action
 
-    def __log_history(self, instance):
-        user_api = User.objects.get(username="api")
+    # def __log_history(self, instance):
+    #     user_api = User.objects.get(username="api")
 
-        LogEntry.objects.log_action(
-            user_id=user_api.id,
-            content_type_id=ContentType.objects.get_for_model(instance.person).pk,
-            object_id=instance.person.pk,
-            object_repr=str(instance.person),
-            action_flag=ADDITION,
-            change_message=f"ADD {instance.campaign.resource_name} TO {instance.campaign.title} // {instance.uuid()}",
-        )
+    #     LogEntry.objects.log_action(
+    #         user_id=user_api.id,
+    #         content_type_id=ContentType.objects.get_for_model(instance.person).pk,
+    #         object_id=instance.person.pk,
+    #         object_repr=str(instance.person),
+    #         action_flag=ADDITION,
+    #         change_message=f"ADD {instance.campaign.resource_name} TO {instance.campaign.title} // {instance.uuid()}",
+    #     )
 
     def __get_resource_name(self):
         if issubclass(self.model, SubmissionInterface):
@@ -276,25 +276,34 @@ class ActionRecordManager(models.Manager):
             "person": {
                 "family_name": person.family_name,
                 "given_name": person.given_name,
-                "postal_address": list(
-                    map(
-                        lambda x: dict(postal_code=x.postal_code),
-                        person.postal_addresses.all(),
-                    )
-                ),
                 "email_addresses": list(
                     map(lambda x: dict(address=x.address), person.email_addresses.all())
                 ),
-                "phone_numbers": list(
-                    map(lambda x: dict(number=x.number), person.phone_numbers.all())
-                ),
-                "custom_fields": {
-                    item.name: item.value for item in person.custom_fields.all()
-                },
             },
             "add_tags": add_tags,
             "remove_tags": remove_tags,
         }
+
+        postal_addresses = person.postal_addresses.all()
+        if len(postal_addresses) > 0:
+            payload["person"]["postal_addresses"] = list(
+                map(
+                    lambda x: dict(postal_code=x.postal_code),
+                    postal_addresses,
+                )
+            )
+
+        phone_numbers = person.phone_numbers.all()
+        if len(phone_numbers) > 0:
+            payload["person"]["phone_numbers"] = list(
+                map(lambda x: dict(number=x.number), phone_numbers)
+            )
+
+        custom_fields = person.custom_fields.all()
+        if len(custom_fields) > 0:
+            payload["person"]["custom_fields"] = {
+                item.name: item.value for item in person.custom_fields.all()
+            }
 
         payload.update(kwargs)
 
@@ -309,10 +318,6 @@ class ActionRecordManager(models.Manager):
 
         if response.status_code == 200:
             return response
-
-        import ipdb
-
-        ipdb.set_trace()
 
         raise InvalidRequestAPIException(response.text)
 

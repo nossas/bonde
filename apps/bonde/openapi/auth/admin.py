@@ -33,5 +33,10 @@ class UserAdmin(DjangoUserAdmin):
     ordering = ('email',)
 
 
-admin.site.register(UsersGroup)
+class UsersGroupAdmin(admin.ModelAdmin):
+    fields = ('name', 'is_valid', 'api_secret_key', 'token')
+    readonly_fields = ('token', )
+
+
+admin.site.register(UsersGroup, UsersGroupAdmin)
 admin.site.register(User, UserAdmin)
