@@ -7,13 +7,7 @@ from rest_framework.permissions import IsAuthenticated
 from bonde.actionnetwork.models import Campaign
 from bonde.openapi.actions.views import CampaignSerializer
 
-from .models import User, UsersGroup
-
-
-# class UserSerializer(serializers.HyperlinkedModelSerializer):
-#     class Meta:
-#         model = User
-#         fields = ['url', 'email', 'first_name', 'is_staff']
+from .models import UsersGroup
 
 
 class UsersGroupSerializer(serializers.ModelSerializer):
@@ -25,7 +19,6 @@ class UsersGroupSerializer(serializers.ModelSerializer):
 
 
 class UsersGroupListAPIView(ListAPIView):
-    # queryset = UsersGroup.objects.all()
     serializer_class = UsersGroupSerializer
     permission_classes = [
         IsAuthenticated,

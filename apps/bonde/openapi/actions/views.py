@@ -1,12 +1,13 @@
 from django.utils.timezone import now
 
-from rest_framework import serializers, status
+from rest_framework import authentication, serializers, status, exceptions, permissions
 from rest_framework.reverse import reverse
 from rest_framework.response import Response
 from rest_framework.generics import get_object_or_404, CreateAPIView, ListAPIView
-from rest_framework.permissions import IsAuthenticated
+# from rest_framework.permissions import IsAuthenticated
 
 from bonde.actionnetwork.models import Campaign, Person
+from bonde.openapi.auth.models import UsersGroup
 
 from .models import Form, Donation, EmailPressure
 
@@ -46,7 +47,7 @@ class CampaignSerializer(serializers.ModelSerializer):
 class CampaignAPIListView(ListAPIView):
     queryset = Campaign.objects.all()
     serializer_class = CampaignSerializer
-    permission_classes = [IsAuthenticated, ]
+    permission_classes = [permissions.IsAuthenticated, ]
 
     def get_queryset(self, *args, **kwargs):
         if not self.request.user.is_superuser:
@@ -55,15 +56,38 @@ class CampaignAPIListView(ListAPIView):
         return self.queryset
 
 
-class ActionCreateApiView(CreateAPIView):
-    permission_classes = [IsAuthenticated, ]
+class UsersGroupAuthentication(authentication.BaseAuthentication):
+    def authenticate(self, request):     
+        auth_token = request.headers.get('OpenAPI-Token')
 
-    def __get_campaign(self):
-        return get_object_or_404(Campaign, pk=self.kwargs.get('campaign_id'))
+        if auth_token and request.method == 'POST':
+            request.openapi_group = UsersGroup.objects.get(token=auth_token)
+            return (None, None)
+        elif request.method == 'POST':
+            raise exceptions.AuthenticationFailed('POST only permitted used OpenAPIToken')
+
+
+class UsersGroupAuthenticated(permissions.BasePermission):
+    
+    def has_permission(self, request, view):
+        return request.openapi_group is not None
+
+
+class ActionCreateApiView(CreateAPIView):
+    authentication_classes = [
+        UsersGroupAuthentication,
+        authentication.BasicAuthentication,
+        authentication.SessionAuthentication,
+        authentication.TokenAuthentication
+    ]
+    permission_classes = [UsersGroupAuthenticated, ]
+
+    def __get_campaign(self, group):
+        return get_object_or_404(Campaign, pk=self.kwargs.get('campaign_id'), action_group=group)
 
     def create(self, request, *args, **kwargs):
         
-        campaign = self.__get_campaign()
+        campaign = self.__get_campaign(request.openapi_group)
 
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
